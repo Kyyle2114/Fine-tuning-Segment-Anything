@@ -132,7 +132,7 @@ def main(rank, opts) -> str:
         
         ### model train / validation ###
         train_bce_loss, train_iou_loss, train_dice, train_iou = trainer.model_train(
-            model=sam,
+            model=sam.module,
             data_loader=train_loader,
             criterion=[bceloss, iouloss],
             optimizer=optimizer,
@@ -161,7 +161,7 @@ def main(rank, opts) -> str:
         
         if opts.rank == 0:
             val_bce_loss, val_iou_loss, val_dice, val_iou = trainer.model_evaluate(
-                model=sam,
+                model=sam.module,
                 data_loader=val_loader,
                 criterion=[bceloss, iouloss],
                 device=f"cuda:{local_gpu_id}"
@@ -172,7 +172,7 @@ def main(rank, opts) -> str:
             # Check EarlyStopping
             es(val_loss)
             if es.early_stop:
-                print(f'Model checkpoint saved at: {save_path}')
+                print(f'Model checkpoint saved at: {save_path} \n')
                 break
         
             ### Save best model ###
@@ -184,8 +184,8 @@ def main(rank, opts) -> str:
             ### print current loss / metric ###
             print(f'epoch {epoch+1:02d}, bce_loss: {train_bce_loss:.5f}, iou_loss: {train_iou_loss:.5f}, dice: {train_dice:.5f}, iou: {train_iou:.5f},', end=' ')
             print(f'val_bce_loss: {val_bce_loss:.5f}, val_iou_loss: {val_iou_loss:.5f}, val_dice: {val_dice:.5f}, val_iou: {val_iou:.5f} \n')
-            
-    return f'Model checkpoint saved at: {save_path}'
+    
+    print(f'Model checkpoint saved at: {save_path} \n') 
 
 if __name__ == '__main__': 
 
@@ -204,5 +204,4 @@ if __name__ == '__main__':
         join=True
     )
     
-    print('=== DONE ===')    
-    
+    print('=== Fine-tuning DONE ===')    
