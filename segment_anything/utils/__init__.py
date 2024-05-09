@@ -12,4 +12,4 @@ from .trainer import *
 from .save_weight import *
 from .iou_loss_torch import *
 from .metrics import *
-from .distributed import *
+from .set_dist import *

@@ -7,20 +7,16 @@ from segment_anything.utils import *
 import torch
 import torch.nn as nn 
 
-import torch.distributed as distributed
+import torch.distributed as dist
 from torch.utils.data import DataLoader, BatchSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel
 
 import os
 import argparse
-import wandb
 from datetime import datetime
 from torchinfo import summary
 
-wandb.login()
-
-WANDB_PROJECT_NAME = 'Fine-tuning-SAM'
 CHECKPOINT_DIR = 'checkpoints'
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
@@ -33,34 +29,29 @@ def get_args_parser():
     parser.add_argument('--model_type', type=str)
     parser.add_argument('--checkpoint', type=str)
     parser.add_argument('--epoch', type=int, default=10)
-    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--lr', type=float, default=2e-4)
     parser.add_argument('--local_rank', type=int)
     
     return parser
 
-### Fine-tuning SAM with WandB ###
+### Fine-tuning SAM ###
 def main(rank, opts) -> str:
     """
-    Model fine-tuning with WandB
-
+    Model fine-tuning
+    
     Returns:
         str: Save path of model checkpoint 
     """
     seed.seed_everything(opts.seed)  
     
-    distributed.init_distributed_training(rank, opts)
+    set_dist.init_distributed_training(rank, opts)
     local_gpu_id = opts.gpu
     
-    ### wandb set ###    
-    if opts.rank == 0:
-        run_time = datetime.now()
-        run_time = run_time.strftime("%b%d_%H%M%S")
-        
-        file_name = run_time + '.pth'
-        save_path = os.path.join(CHECKPOINT_DIR, file_name)
-        
-        wandb.init(project=WANDB_PROJECT_NAME)
-        wandb.run.name = run_time
+    ### checkpoint set ### 
+    run_time = datetime.now()
+    run_time = run_time.strftime("%b%d_%H%M%S")
+    file_name = run_time + '.pth'
+    save_path = os.path.join(CHECKPOINT_DIR, file_name)
 
     ### dataset & dataloader ### 
     train_set = dataset.make_dataset(
@@ -93,7 +84,7 @@ def main(rank, opts) -> str:
     )
     
     ### SAM config ### 
-    sam_checkpoint = opts.checkpoimt
+    sam_checkpoint = opts.checkpoint
     model_type = opts.model_type
 
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
@@ -131,13 +122,6 @@ def main(rank, opts) -> str:
                                                            T_max=len(train_loader), 
                                                            eta_min=0,
                                                            last_epoch=-1)
-    if opts.rank == 0: 
-        wandb.watch(
-            models=sam,
-            criterion=(bceloss, iouloss),
-            log='all',
-            log_freq=10
-        )
 
     max_loss = np.inf 
     
@@ -157,17 +141,17 @@ def main(rank, opts) -> str:
         )
         
         if opts.dist:
-            distributed.all_reduce(train_bce_loss, op=distributed.ReduceOp.SUM)            
-            train_bce_loss = train_bce_loss.item() / distributed.get_world_size()
+            dist.all_reduce(train_bce_loss, op=dist.ReduceOp.SUM)            
+            train_bce_loss = train_bce_loss.item() / dist.get_world_size()
             
-            distributed.all_reduce(train_iou_loss, op=distributed.ReduceOp.SUM)            
-            train_iou_loss = train_iou_loss.item() / distributed.get_world_size()
+            dist.all_reduce(train_iou_loss, op=dist.ReduceOp.SUM)            
+            train_iou_loss = train_iou_loss.item() / dist.get_world_size()
             
-            distributed.all_reduce(train_dice, op=distributed.ReduceOp.SUM)
-            train_dice = train_dice.item() / distributed.get_world_size()
+            dist.all_reduce(train_dice, op=dist.ReduceOp.SUM)
+            train_dice = train_dice.item() / dist.get_world_size()
             
-            distributed.all_reduce(train_iou, op=distributed.ReduceOp.SUM)
-            train_iou = train_iou.item() / distributed.get_world_size()
+            dist.all_reduce(train_iou, op=dist.ReduceOp.SUM)
+            train_iou = train_iou.item() / dist.get_world_size()
             
         if not opts.dist:
             train_bce_loss = train_bce_loss.item()
@@ -190,24 +174,6 @@ def main(rank, opts) -> str:
             if es.early_stop:
                 print(f'Model checkpoint saved at: {save_path}')
                 break
-            
-            ### loss / metric logging ###
-            wandb.log(
-                {
-                    'Train BCE Loss': train_bce_loss,
-                    'Train IoU Loss': train_iou_loss,
-                    'Train Dice Metric': train_dice,
-                    'Train IoU Metric': train_iou
-                }, step=epoch+1
-            )
-            wandb.log(
-                {
-                    'Validation BCE Loss': val_bce_loss,
-                    'Validation IoU Loss': val_iou_loss,
-                    'Validation Dice Metric': val_dice,
-                    'Validation IoU Metric': val_iou
-                }, step=epoch+1
-            )
         
             ### Save best model ###
             if val_loss < max_loss:
