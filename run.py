@@ -20,14 +20,24 @@ from torchinfo import summary
 CHECKPOINT_DIR = 'checkpoints'
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def get_args_parser():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--port', type=int, default=12345)
-    parser.add_argument('--dist', type=bool, default=True)
+    parser.add_argument('--port', type=int, default=2024)
+    parser.add_argument('--dist', type=str2bool, default=True)
     parser.add_argument('--seed', type=int, default=21)
-    parser.add_argument('--model_type', type=str)
-    parser.add_argument('--checkpoint', type=str)
+    parser.add_argument('--model_type', type=str, default='vit_t')
+    parser.add_argument('--checkpoint', type=str, default='sam_vit_t.pt')
     parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument('--lr', type=float, default=2e-4)
     parser.add_argument('--local_rank', type=int)
@@ -190,11 +200,16 @@ def main(rank, opts) -> str:
 if __name__ == '__main__': 
 
     parser = argparse.ArgumentParser('Fine-tuning SAM', parents=[get_args_parser()])
-    opts = parser.parse_args()
+    opts = parser.parse_args() 
     
-    opts.ngpus_per_node = torch.cuda.device_count()
+    if opts.dist:
+        opts.ngpus_per_node = torch.cuda.device_count()
+        opts.gpu_ids = list(range(opts.ngpus_per_node))
+        
+    if not opts.dist:
+        opts.ngpus_per_node = 1
+        opts.gpu_ids = [0]
     
-    opts.gpu_ids = list(range(opts.ngpus_per_node))
     opts.num_workers = opts.ngpus_per_node * 4
 
     torch.multiprocessing.spawn(
@@ -204,4 +219,4 @@ if __name__ == '__main__':
         join=True
     )
     
-    print('=== Fine-tuning DONE ===')    
+    print('=== Fine-tuning DONE === \n')    
