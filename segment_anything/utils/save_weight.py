@@ -42,6 +42,8 @@ def load_partial_weight(model: Type[nn.Module],
     model_state_dict = model.state_dict()
     
     for k, v in state_dict_trainable.items():
+        # module.mask_decoder.* -> mask_decoder.* 
+        k = k[7:]
         model_state_dict[k] = v
 
     model.load_state_dict(model_state_dict)

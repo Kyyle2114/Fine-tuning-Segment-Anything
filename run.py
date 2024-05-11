@@ -70,8 +70,8 @@ def main(rank, opts) -> str:
     )
     
     val_set = dataset.make_dataset(
-        image_dir='datasets/train/image',
-        mask_dir='datasets/train/mask'
+        image_dir='datasets/test/image',
+        mask_dir='datasets/test/mask'
     )
     
     if opts.dist:
