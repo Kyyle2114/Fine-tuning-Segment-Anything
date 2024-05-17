@@ -26,6 +26,8 @@ If you want to apply it to a multi-class dataset, modify ```segment_anything/uti
 
 If the validation score improves, it saves the model weights. However, saving the entire set of weights is inefficient, so it **only saves the parameters being trained**. For more details, refer to ```segment_anything/utils/save_weight.py```. After loading the model with an existing checkpoint, you can load a part of the weights using ```load_partial_weight```. An example is in ```load_model_ex.py```
 
+All training processes are logged using **wandb**. To modify the wandb project name, modify the --project_name argument.
+
 ## How to use 
 
 > To run the code, you need libraries such as ```numpy```, ```torch```, ```torchinfo```, and ```timm```(for vit_t).
@@ -33,7 +35,7 @@ If the validation score improves, it saves the model weights. However, saving th
 - [Download the checkpoint](https://github.com/facebookresearch/segment-anything?tab=readme-ov-file#model-checkpoints) corresponding to the model type. 
 - Inside ```run.py```, provide the appropriate paths for the train and validation datasets. 
 - You can check the meaning of each argument in argparse at the top of ```run.py```. 
-- For example, you can run like this: ```python run.py --batch_size 8 --port 1234 --dist True --seed 21 --model_type vit_h --checkpoint sam_vit_h.pth --epoch 5 --lr 2e-4```
+- For example, you can run like this: ```python run.py --batch_size 8 --port 1234 --dist True --seed 21 --model_type vit_h --checkpoint sam_vit_h.pth --epoch 5 --lr 2e-4 --project_name Fine-tuning-SAM```
 
 The number of num_workers is set to 4 times the number of available GPUs. If you want to change this, modify opts.num_workers at the bottom of ```run.py```.
 

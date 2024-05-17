@@ -14,6 +14,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 import os
 import argparse
+import wandb
 from datetime import datetime
 from torchinfo import summary
 
@@ -40,6 +41,7 @@ def get_args_parser():
     parser.add_argument('--checkpoint', type=str, default='sam_vit_t.pt')
     parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument('--lr', type=float, default=2e-4)
+    parser.add_argument('--project_name', type=float, default='Fine-tuning-SAM')
     parser.add_argument('--local_rank', type=int)
     
     return parser
@@ -62,6 +64,10 @@ def main(rank, opts) -> str:
     run_time = run_time.strftime("%b%d_%H%M%S")
     file_name = run_time + '.pth'
     save_path = os.path.join(CHECKPOINT_DIR, file_name)
+    
+    if opts.rank == 0:
+        wandb.init(project=opts.project_name)
+        wandb.run.name = run_time 
 
     ### dataset & dataloader ### 
     train_set = dataset.make_dataset(
@@ -127,12 +133,30 @@ def main(rank, opts) -> str:
     lr = opts.lr
     # EarlyStopping : Determined based on the validation loss. Lower is better(mode='min').
     es = trainer.EarlyStopping(patience=EPOCHS//2, delta=0, mode='min', verbose=True)
-    optimizer = torch.optim.AdamW(sam.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 
-                                                           T_max=len(train_loader), 
-                                                           eta_min=0,
-                                                           last_epoch=-1)
+    optimizer = torch.optim.AdamW(
+        sam.parameters(), 
+        lr=lr
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, 
+        T_max=len(train_loader), 
+        eta_min=0,
+        last_epoch=-1
+    )
 
+    if opts.rank == 0:
+        wandb.watch(
+            models=sam.module,
+            criterion=(bceloss, iouloss),
+            log='all',
+            log_freq=10
+        )
+    
+        wandb.run.summary['optimizer'] = type(optimizer).__name__
+        wandb.run.summary['scheduler'] = type(scheduler).__name__
+        wandb.run.summary['initial lr'] = lr
+        wandb.run.summary['total epoch'] = EPOCHS
+    
     max_loss = np.inf 
     
     for epoch in range(EPOCHS):
@@ -179,6 +203,24 @@ def main(rank, opts) -> str:
             
             val_loss = val_bce_loss + val_iou_loss
             
+            wandb.log(
+                {
+                    'Train BCE Loss': train_bce_loss,
+                    'Train IoU Loss': train_iou_loss,
+                    'Train Dice Metric': train_dice,
+                    'Train IoU Metric': train_iou
+                }, step=epoch+1
+            )
+        
+            wandb.log(
+                {
+                    'Validation BCE Loss': val_bce_loss,
+                    'Validation IoU Loss': val_iou_loss,
+                    'Validation Dice Metric': val_dice,
+                    'Validation IoU Metric': val_iou
+                }, step=epoch+1
+            )
+            
             # Check EarlyStopping
             es(val_loss)
             if es.early_stop:
@@ -199,7 +241,9 @@ def main(rank, opts) -> str:
 
 if __name__ == '__main__': 
 
-    parser = argparse.ArgumentParser('Fine-tuning SAM', parents=[get_args_parser()])
+    wandb.login()
+    
+    parser = argparse.ArgumentParser('Fine-tuning-SAM', parents=[get_args_parser()])
     opts = parser.parse_args() 
     
     if opts.dist:
