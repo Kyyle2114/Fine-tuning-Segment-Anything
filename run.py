@@ -32,7 +32,7 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def get_args_parser():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--batch_size', type=int, default=1, help='batch size allocated to each GPU')
     parser.add_argument('--port', type=int, default=1234, help='port number for distributed learning')
     parser.add_argument('--dist', type=str2bool, default=True, help='if True, use multi-gpu(distributed) training')
