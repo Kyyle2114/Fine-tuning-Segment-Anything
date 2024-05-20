@@ -19,7 +19,7 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.image_dir, self.data_images[idx])
-        mask_path = os.path.join(self.mask_dir, self.data_images[idx])  
+        mask_path = os.path.join(self.mask_dir, self.mask_images[idx])  
 
         image = Image.open(img_path)
         mask = Image.open(mask_path)
