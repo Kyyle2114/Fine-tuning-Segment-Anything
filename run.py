@@ -123,8 +123,13 @@ def main(rank, opts) -> str:
     summary(sam)
     print()
 
-    sam = DistributedDataParallel(module=sam, device_ids=[local_gpu_id])    
-
+    if not opts.dist:
+        model = sam
+    
+    if opts.dist:
+        sam = DistributedDataParallel(module=sam, device_ids=[local_gpu_id])    
+        model = sam.module
+        
     ### training config ###  
     bceloss = nn.BCELoss().to(local_gpu_id)
     iouloss = iou_loss_torch.IoULoss().to(local_gpu_id)
@@ -135,7 +140,7 @@ def main(rank, opts) -> str:
     es = trainer.EarlyStopping(patience=EPOCHS//2, delta=0, mode='min', verbose=True)
     es_signal = torch.tensor([0]).to(local_gpu_id)
     optimizer = torch.optim.AdamW(
-        sam.parameters(), 
+        model.parameters(), 
         lr=lr
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -147,7 +152,7 @@ def main(rank, opts) -> str:
 
     if opts.rank == 0:
         wandb.watch(
-            models=sam.module,
+            models=model,
             criterion=(bceloss, iouloss),
             log='all',
             log_freq=10
@@ -163,8 +168,10 @@ def main(rank, opts) -> str:
     for epoch in range(EPOCHS):
         
         # EarlyStopping
-        dist.barrier()
-        dist.all_reduce(es_signal, op=dist.ReduceOp.SUM) 
+        if opts.dist:
+            dist.barrier()  
+            dist.all_reduce(es_signal, op=dist.ReduceOp.SUM) 
+            
         if es_signal.item() == 1:
             break
         
@@ -173,7 +180,7 @@ def main(rank, opts) -> str:
         
         ### model train / validation ###
         train_bce_loss, train_iou_loss, train_dice, train_iou = trainer.model_train(
-            model=sam.module,
+            model=model,
             data_loader=train_loader,
             criterion=[bceloss, iouloss],
             optimizer=optimizer,
@@ -204,7 +211,7 @@ def main(rank, opts) -> str:
         
         if opts.rank == 0:
             val_bce_loss, val_iou_loss, val_dice, val_iou = trainer.model_evaluate(
-                model=sam.module,
+                model=model,
                 data_loader=val_loader,
                 criterion=[bceloss, iouloss],
                 device=f"cuda:{local_gpu_id}"
@@ -267,11 +274,15 @@ if __name__ == '__main__':
     
     opts.num_workers = opts.ngpus_per_node * 4
 
-    torch.multiprocessing.spawn(
-        main,
-        args=(opts,),
-        nprocs=opts.ngpus_per_node,
-        join=True
-    )
+    if opts.dist:
+        torch.multiprocessing.spawn(
+            main,
+            args=(opts,),
+            nprocs=opts.ngpus_per_node,
+            join=True
+        )
+    
+    if not opts.dist:
+        main(rank=0, opts=opts)
     
     print('=== Fine-tuning DONE === \n')    
