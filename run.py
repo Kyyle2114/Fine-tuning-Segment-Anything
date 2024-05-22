@@ -267,22 +267,20 @@ if __name__ == '__main__':
     if opts.dist:
         opts.ngpus_per_node = torch.cuda.device_count()
         opts.gpu_ids = list(range(opts.ngpus_per_node))
+        opts.num_workers = opts.ngpus_per_node * 4
         
-    if not opts.dist:
-        opts.ngpus_per_node = 1
-        opts.gpu_ids = [0]
-    
-    opts.num_workers = opts.ngpus_per_node * 4
-
-    if opts.dist:
         torch.multiprocessing.spawn(
             main,
             args=(opts,),
             nprocs=opts.ngpus_per_node,
             join=True
         )
-    
+        
     if not opts.dist:
+        opts.ngpus_per_node = 1
+        opts.gpu_ids = [0]
+        opts.num_workers = 0
+    
         main(rank=0, opts=opts)
     
     print('=== Fine-tuning DONE === \n')    
