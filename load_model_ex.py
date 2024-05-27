@@ -16,7 +16,8 @@ sam.to(device)
 
 sam = save_weight.load_partial_weight(
     model=sam,
-    load_path='checkpoints/May11_190102.pth'
+    load_path='checkpoints/May11_190102.pth',
+    dist=True
 )
 
 val_set = dataset.make_dataset(

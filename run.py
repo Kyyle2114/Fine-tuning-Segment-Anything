@@ -4,6 +4,8 @@ warnings.filterwarnings('ignore')
 from segment_anything import sam_model_registry
 from segment_anything.utils import *
 
+import albumentations as A
+
 import torch
 import torch.nn as nn 
 
@@ -70,9 +72,20 @@ def main(rank, opts) -> str:
         wandb.run.name = run_time 
 
     ### dataset & dataloader ### 
+    # data augmentation for train image & mask 
+    transform = A.Compose([
+        A.OneOf([
+            A.HorizontalFlip(p=1),
+            A.VerticalFlip(p=1),
+            A.RandomRotate90(p=1),
+            A.ShiftScaleRotate(p=1)
+        ], p=0.5)
+    ])
+    
     train_set = dataset.make_dataset(
         image_dir='datasets/train/image',
-        mask_dir='datasets/train/mask'
+        mask_dir='datasets/train/mask',
+        transform=transform
     )
     
     val_set = dataset.make_dataset(
