@@ -48,7 +48,7 @@ def model_train(model,
         for X, y in tqdm(data_loader):
             optimizer.zero_grad()
             
-            X_torch, y_torch = X.float().permute(0, 3, 1, 2).contiguous().to(device), y.float().to(device)
+            X_torch, y_torch = X.float().permute(0, 3, 1, 2).contiguous().to(device), y[..., 0].float().to(device)
             
             batched_input = []
             
