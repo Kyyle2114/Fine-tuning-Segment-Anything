@@ -260,7 +260,7 @@ def main(rank, opts) -> str:
             if val_loss < max_loss:
                 print(f'[INFO] val_loss has been improved from {max_loss:.5f} to {val_loss:.5f}. Save model.')
                 max_loss = val_loss
-                _ = save_weight.save_partial_weight(model=sam, save_path=save_path)
+                _ = save_weight.save_partial_weight(model=model, save_path=save_path)
             
             ### print current loss / metric ###
             print(f'epoch {epoch+1:02d}, bce_loss: {train_bce_loss:.5f}, iou_loss: {train_iou_loss:.5f}, dice: {train_dice:.5f}, iou: {train_iou:.5f},', end=' ')
